@@ -17,6 +17,7 @@
 
 export * from "./contracts.ts";
 export * from "./ports.ts";
+export * from "./session-workspace.ts";
 export * from "./chains.ts";
 export * from "./render-settings.ts";
 

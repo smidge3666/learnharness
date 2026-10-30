@@ -51,6 +51,13 @@ const PRODUCT_NAME = "LearnHarness";
 // Must run before the LH_DEV_URL suffix below — dev becomes
 // "LearnHarness-dev".
 app.setName(PRODUCT_NAME);
+// The manager stamps only its locally installed payload, never release builds.
+// Installed builds use the normal LearnHarness profile and single-instance lock.
+// The marker only disables release replacement; it never redirects user data.
+let localBuild = false;
+try {
+	localBuild = JSON.parse(fs.readFileSync(path.join(process.resourcesPath, "local-build.json"), "utf8")).localBuild === true;
+} catch { /* ordinary release/dev build */ }
 const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
 const DATA_DIR = () => path.join(app.getPath("userData"), "data");
 
@@ -504,6 +511,11 @@ function installUpdateNow() {
 }
 
 function setupAutoUpdater() {
+	if (localBuild) {
+		log("auto-update: locally installed build — release replacement disabled; rebuild with the manager");
+		reportUpdateStatus("disabled");
+		return;
+	}
 	if (!app.isPackaged) {
 		log("auto-update: dev build — updater disabled");
 		reportUpdateStatus("disabled");

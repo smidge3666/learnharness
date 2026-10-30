@@ -19,3 +19,8 @@ xai-credentials.json*
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/
+
+# Local manager state, logs and private backups
+.launcher/
+__pycache__/
+*.pyc

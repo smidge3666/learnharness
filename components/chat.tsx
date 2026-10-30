@@ -51,7 +51,8 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, LibraryIcon, MessageCircleQuestionIcon, WaypointsIcon } from "lucide-react";
+import { SessionWorkspace, SIDE_QUESTION_EVENT, type WorkspaceTab } from "@/components/session-workspace";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -874,6 +875,8 @@ export function Chat({
 	// The live plan popup (wave 4): opened by any transcript plan block, the
 	// top-bar plan chip, and the dock band's marginalia.
 	const [planOpen, setPlanOpen] = useState(false);
+	// Side questions + Sources (one right-hand panel, per session).
+	const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab | null>(null);
 	// Real plan presence — gates the marginalia's clickable flank. A JSX
 	// element is always truthy; gating on the node alone mounted a phantom
 	// (invisible, clickable) button in the bottom-right whenever a question
@@ -1349,6 +1352,40 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
+					{kind !== "practice" && (
+						<>
+							<Hint label="Ask a side question" side="bottom">
+								<button
+									type="button"
+									data-testid="side-questions-chip"
+									aria-pressed={workspaceTab === "side"}
+									onClick={(e) => {
+										blurAfterPointerClick(e);
+										setWorkspaceTab(workspaceTab === "side" ? null : "side");
+									}}
+									className="lh-no-drag flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+								>
+									<MessageCircleQuestionIcon className="size-3.5 text-primary" aria-hidden />
+									Ask
+								</button>
+							</Hint>
+							<Hint label="Course files, demos and diagrams" side="bottom">
+								<button
+									type="button"
+									data-testid="sources-chip"
+									aria-pressed={workspaceTab === "sources"}
+									onClick={(e) => {
+										blurAfterPointerClick(e);
+										setWorkspaceTab(workspaceTab === "sources" ? null : "sources");
+									}}
+									className="lh-no-drag flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+								>
+									<LibraryIcon className="size-3.5 text-primary" aria-hidden />
+									Sources
+								</button>
+							</Hint>
+						</>
+					)}
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
 <button
@@ -1777,6 +1814,7 @@ export function Chat({
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
 			</div>
+			{kind !== "practice" && <SessionWorkspace key={chatId} chatId={chatId} messages={messages} tab={workspaceTab} setTab={setWorkspaceTab} />}
 		</div>
 		</JobsContext.Provider>
 		</SessionMermaidContext.Provider>
@@ -2362,6 +2400,12 @@ function DockOverlay({
 									: undefined
 							}
 							claim={revealPending}
+							onAsk={() => {
+								// The check stays closed and unanswered; the draft stays too.
+								void finishDictation().then(() => {
+									window.dispatchEvent(new CustomEvent(SIDE_QUESTION_EVENT, { detail: { chatId, text: readingThinking } }));
+								});
+							}}
 						/>
 					)}
 					<div ref={shellRef} className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">

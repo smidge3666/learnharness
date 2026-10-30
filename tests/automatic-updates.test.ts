@@ -13,7 +13,7 @@ const mainFile = fileURLToPath(new URL("../electron/main.cjs", import.meta.url))
 const mainSource = readFileSync(mainFile, "utf8");
 const mainRequire = createRequire(mainFile);
 
-function fixture({ packaged = true, updaterMissing = false } = {}) {
+function fixture({ packaged = true, updaterMissing = false, managedInstall = false } = {}) {
 	let settings: string | Error = JSON.stringify({ version: 1, general: { autoUpdate: true } });
 	const settingsReads: string[] = [];
 	const order: string[] = [];
@@ -93,6 +93,7 @@ function fixture({ packaged = true, updaterMissing = false } = {}) {
 			}
 			if (id === "node:fs") return {
 				readFileSync: (file: string) => {
+					if (file === "/fixture/resources/local-build.json") return JSON.stringify({ localBuild: managedInstall });
 					settingsReads.push(file);
 					if (settings instanceof Error) throw settings;
 					return settings;
@@ -100,7 +101,7 @@ function fixture({ packaged = true, updaterMissing = false } = {}) {
 			};
 			return mainRequire(id);
 		},
-		process: { argv: [], env: { LH_DEV_URL: "http://127.0.0.1:9000" }, platform: "darwin", on() {} },
+		process: { argv: [], resourcesPath: "/fixture/resources", env: { LH_DEV_URL: "http://127.0.0.1:9000" }, platform: "darwin", on() {} },
 		__dirname: path.dirname(mainFile), URL,
 		setInterval: (callback: () => void, delay: number) => intervals.push({ callback, delay }),
 		setTimeout() {},
@@ -121,6 +122,14 @@ function fixture({ packaged = true, updaterMissing = false } = {}) {
 }
 
 describe("automatic-update preference gate", () => {
+	it("manager installation uses the real desktop profile without a local suffix and disables replacement", async () => {
+		const f = fixture({ managedInstall: true });
+		assert.equal(f.run('app.getPath("userData")'), "/fixture/custom-user-data-dev", "only the external development shell gets a separate profile");
+		f.run('delete process.env.LH_DEV_URL; setupAutoUpdater()');
+		await f.check(true);
+		assert.equal(f.updater.checks, 0);
+		assert.equal(f.state().status, "disabled");
+	});
 	it("explicit OFF skips automatic checks, but manual checks still run without reading the preference", async () => {
 		const f = fixture();
 		f.setSettings({ general: { autoUpdate: false } });

@@ -25,6 +25,7 @@ export function ReadingThinkingField({
 	onEscape,
 	onOpen,
 	claim,
+	onAsk,
 }: {
 	value: string;
 	onChange: (v: string) => void;
@@ -37,6 +38,9 @@ export function ReadingThinkingField({
 	onOpen?: () => void;
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
+	/** "Ask a question first": take the reading thoughts to the side panel
+	 *  without opening (or answering) the waiting check. */
+	onAsk?: () => void;
 }) {
 	useDictationTarget(
 		useCallback(
@@ -76,12 +80,11 @@ export function ReadingThinkingField({
 						onEscape?.();
 						return;
 					}
-					// ENTER OPENS THE WAITING CHECK (owner, keyboard round
-					// 2026-10-06): while the check sits closed, plain Enter
-					// (and the universal ⌘/Ctrl+Enter) opens it — the dictation
-					// flush lands HERE first via the caller's finishDictation,
-					// so spoken thoughts ride along. Shift+Enter stays a newline.
-					if (e.key === "Enter" && onOpen !== undefined && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
+					// ⌘/Ctrl+Enter OPENS THE WAITING CHECK. Plain Enter is a
+					// newline (owner bug report: plain Enter jumped straight into
+					// the questions mid-thought). The dictation flush lands HERE
+					// first via the caller's finishDictation.
+					if (e.key === "Enter" && onOpen !== undefined && (e.metaKey || e.ctrlKey)) {
 						e.preventDefault();
 						e.stopPropagation();
 						onOpen();
@@ -98,6 +101,18 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/>
+			{onAsk && (
+				<div className="flex justify-end pt-1">
+					<button
+						type="button"
+						data-testid="reading-ask-first"
+						onClick={onAsk}
+						className="rounded-sm px-2 py-1 font-ui text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						Ask a question first
+					</button>
+				</div>
+			)}
 		</div>
 	);
 }

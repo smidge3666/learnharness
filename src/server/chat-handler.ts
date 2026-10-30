@@ -1,3 +1,4 @@
+import { workspaceFor } from "./session-workspace.ts";
 import type { Usage } from "@earendil-works/pi-ai";
 import {
 	createPracticeAgent,
@@ -475,6 +476,7 @@ export async function handleChatInput(
 			? createTeacherAgent(
 					{
 						chatId,
+						workspace: workspaceFor(chatId),
 						chatStore: stores.chatStore,
 						jobStore: stores.jobStore,
 						spawn: (job, input) => void jobRunner.runJob(job.id, input),
@@ -487,6 +489,7 @@ export async function handleChatInput(
 			: createProberAgent(
 					{
 						chatId,
+						workspace: workspaceFor(chatId),
 						chatStore: stores.chatStore,
 						deliver: (steer) => void deliverJobResult(steer),
 						// Fix wave (2026-09-20): the prober carries research + pdf
