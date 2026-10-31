@@ -28,7 +28,7 @@
  * turn rides one composition.
  */
 
-import type { QuestionAnswerData } from "./question-core.ts";
+import { dismissedAnswer, type QuestionAnswerData } from "./question-core.ts";
 import type { LhMessage } from "./native-messages.ts";
 import {
 	activeProblemOf,
@@ -46,6 +46,8 @@ import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
 	| { type: "text"; text: string }
+	/** Ask the main teacher before taking the pending check; not a graded attempt. */
+	| { type: "clarify"; toolCallId: string; text: string; readingThinking?: string }
 	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
@@ -165,6 +167,10 @@ export function parseChatInput(input: unknown): ChatInput {
 				throw new ChatInputError("text input requires non-empty text");
 			}
 			return { type: "text", text: i.text };
+		case "clarify":
+			if (typeof i.toolCallId !== "string" || !i.toolCallId || typeof i.text !== "string" || !i.text.trim() || i.text.length > 20000) throw new ChatInputError("clarify requires a pending check and non-empty question (max 20000 characters)");
+			if (i.readingThinking !== undefined && (typeof i.readingThinking !== "string" || i.readingThinking.length > 20000)) throw new ChatInputError("Invalid reading thoughts");
+			return { type: "clarify", toolCallId: i.toolCallId, text: i.text, readingThinking: i.readingThinking as string | undefined };
 		case "answer":
 			if (typeof i.toolCallId !== "string" || i.toolCallId.length === 0) {
 				throw new ChatInputError("answer input requires toolCallId");
@@ -208,6 +214,14 @@ export function inputAppends(
 	switch (input.type) {
 		case "text":
 			return [...dismissalConclusion(record), newUserMessage(input.text)];
+		case "clarify": {
+			const pending = danglingQuestionOf(record.messages);
+			if (!pending || pending.toolCallId !== input.toolCallId) throw new ChatInputError("clarify targets no pending question");
+			const deferred = newAnswerResult(pending.toolCallId, pending.tool, { ...dismissedAnswer(toolQuestionKind(pending.tool)!, String((pending.input as { question?: string })?.question ?? "Check")), deferred: true });
+			deferred.content = [{ type: "text", text: JSON.stringify({ deferred: true, reason: "Learner asks for clarification before attempting the check; NOT an answer or a failed attempt." }) }];
+			const reading = input.readingThinking?.trim();
+			return [deferred, newUserMessage(`${reading ? `Thinking while reading:\n${reading}\n\n` : ""}Question before the check:\n${input.text}\n\nPlease clarify this before asking me to check my understanding. The previous check was deferred, not attempted.`)];
+		}
 		case "answer": {
 			const pending = danglingQuestionOf(record.messages);
 			if (!pending || pending.toolCallId !== input.toolCallId) {

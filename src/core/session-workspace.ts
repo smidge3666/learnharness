@@ -9,7 +9,8 @@ export interface SessionSource {
 	title: string; content?: string; url?: string; citation?: string; result?: unknown;
 }
 export interface WorkspacePort {
-	list(): { files: CourseFile[]; sources: SessionSource[] };
+	/** `names`: learner renames by source id, already applied to `sources`. */
+	list(): { files: CourseFile[]; sources: SessionSource[]; names?: Record<string, string> };
 	read(fileId: string, pages: string): Promise<{ text: string; pages: number }>;
 	/** The saved source plus the rendered page PNG (base64) for the model to inspect. */
 	show(fileId: string, page: number): Promise<{ source: SessionSource; png: string }>;

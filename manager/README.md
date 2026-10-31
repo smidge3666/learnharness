@@ -12,25 +12,19 @@ cd ~/Projects/Learn
 
 ## Dashboard keys
 
+The dashboard is deliberately minimal: four keys.
+
 | Key | Action |
 |---|---|
-| O | open app-dev (test data, never your real chats) |
-| A | build your code and install it as the main app (real chats) |
-| R / X | restart / stop the managed server |
-| B | production build: `next build`, provider smoke, `build-server.mjs`, server smoke |
-| T / C | app tests / full check (typecheck, app tests, lint, manager tests) |
-| I | `npm ci` |
-| S | edit supported app feature settings |
+| O | open app-dev (restarts the dev server automatically; test data, never your real chats) |
+| A | build your current code and install it as the main app (real chats) |
+| X | stop the dev server |
 | P | list, create, install, enable or disable plugins |
-| V | launcher config: mode, port, data directory, auth file, remote |
-| K | back up data (server must be stopped) |
-| U | fetch from `amosblomqvist/learnharness` into `upstream/*`; nothing is merged |
-| G | commit and push everything to GitHub (see below) |
-| L / H | live server log / back to home |
-| D / F | open data / code folder |
-| Q | quit the dashboard; the server keeps running |
+| Q | quit the dashboard; a running dev server keeps running |
 
 Commands that produce output leave the dashboard temporarily and return on Enter. Ctrl-C cancels a running command.
+
+Everything else stays available as `./learn` commands for scripting and agents: `install`, `start`, `stop`, `restart`, `build`, `test`, `typecheck`, `lint`, `check`, `status`, `logs`, `config`, `settings`, `plugins`, `backup`, `desktop`, `git`. Run `./learn --help` for the full list.
 
 ## Two modes
 

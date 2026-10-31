@@ -178,8 +178,9 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(self.m.config["open"], "electron")
         with self.desktop_env():
             self.m.install_desktop_payload(self.fake_payload())
-            with patch.object(self.m, "desktop_open") as desk, patch.object(self.m, "start") as start, patch.object(launcher.subprocess, "Popen") as spawn:
+            with patch.object(self.m, "desktop_open") as desk, patch.object(self.m, "start") as start, patch.object(self.m, "wait_for_app") as ready, patch.object(launcher.subprocess, "Popen") as spawn:
                 self.m.open()
+                ready.assert_called_once()
                 desk.assert_not_called()
                 start.assert_called_once()
                 env = spawn.call_args.kwargs["env"]
@@ -189,6 +190,31 @@ class LauncherTests(unittest.TestCase):
             profile = self.m.desktop_paths()["profile"]
             self.assertFalse(Path(env["LH_DATA_DIR"]).is_relative_to(profile))
             self.assertFalse(Path(env["LH_AUTH_FILE"]).is_relative_to(profile))
+
+    def test_wait_for_app_refuses_dead_or_broken_server(self):
+        with patch.object(self.m, "control", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "exited before"):
+                self.m.wait_for_app(timeout=1)
+        state = {"running": True, "url": self.m.url}
+        err = launcher.urllib.error.HTTPError(self.m.url, 500, "x", {}, None)
+        with patch.object(self.m, "control", return_value=state), patch.object(launcher.urllib.request, "urlopen", side_effect=err):
+            with self.assertRaisesRegex(RuntimeError, "compilation failed"):
+                self.m.wait_for_app(timeout=1)
+
+    def test_wait_for_app_retries_until_ready(self):
+        class Ok:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        calls = [ConnectionRefusedError("refused"), ConnectionRefusedError("refused"), Ok()]
+        def opener(*a, **k):
+            r = calls.pop(0)
+            if isinstance(r, Exception): raise r
+            return r
+        with patch.object(self.m, "control", return_value={"running": True, "url": self.m.url}), \
+             patch.object(launcher.urllib.request, "urlopen", side_effect=opener), patch.object(launcher.time, "sleep"):
+            self.m.wait_for_app(timeout=30)
+        self.assertEqual(calls, [])
 
     def test_install_removes_only_owned_legacy_shortcut(self):
         with self.desktop_env():

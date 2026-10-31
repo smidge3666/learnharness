@@ -134,6 +134,13 @@ if (process.argv.includes("--browser-service")) {
 			const win = BrowserWindow.getAllWindows()[0];
 			if (win) {
 				if (win.isMinimized()) win.restore();
+				// The manager may have restarted app-dev under an existing window.
+				// Reload its current session after HTTP readiness rather than focus a blank error page.
+				if (process.env.LH_DEV_URL) {
+					void waitUntilUp(process.env.LH_DEV_URL).then(() => {
+						if (!win.isDestroyed()) win.webContents.reload();
+					}).catch((err) => log(`dev reopen failed: ${err.message}`));
+				}
 				win.focus();
 			}
 		});
@@ -695,6 +702,8 @@ async function main() {
 		log(`server up: ${url}`);
 	} else {
 		log(`dev mode: ${devUrl}`);
+		// Also protect direct `LH_DEV_URL=… electron .` launches, outside the manager.
+		await waitUntilUp(devUrl);
 	}
 
 	// Renderer controls contain no token/URL/code operation. The separate server

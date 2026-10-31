@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { joinDictation, useDictationTarget } from "@/components/dictation";
 import { PathInput } from "@/components/path-input";
 
@@ -26,22 +26,24 @@ export function ReadingThinkingField({
 	onOpen,
 	claim,
 	onAsk,
+	busy = false,
 }: {
 	value: string;
 	onChange: (v: string) => void;
 	/** Esc in the field stops dictation (threaded from the page's hook). */
 	onEscape?: () => void;
-	/** The check waits CLOSED — Enter opens it (owner, keyboard round
-	 *  2026-10-06). The caller finishes any live dictation FIRST (the
+	/** The check waits CLOSED — Ctrl/Cmd+Enter opens it; plain Enter is a newline. The caller finishes any live dictation FIRST (the
 	 *  flush lands here — the field is the live claim), then reveals.
 	 *  Absent = the check is open: Enter keeps the dumping convention. */
 	onOpen?: () => void;
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
-	/** "Ask a question first": take the reading thoughts to the side panel
-	 *  without opening (or answering) the waiting check. */
-	onAsk?: () => void;
+	/** Ask the main teacher before attempting the waiting check. */
+	onAsk?: (question: string) => void;
+	busy?: boolean;
 }) {
+	const [asking, setAsking] = useState(false);
+	const [question, setQuestion] = useState("");
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
@@ -101,12 +103,16 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/>
-			{onAsk && (
+			{onAsk && asking && <div data-clarify-form="" className="mt-2 space-y-2 border-t border-border pt-2">
+				<PathInput aria-label="Question before the check" placeholder="What would you like clarified?" value={question} onValueChange={setQuestion} className="lh-input min-h-12 w-full bg-transparent py-0.5 outline-none" onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (question.trim() && !busy) onAsk(question); } }} />
+				<div className="flex justify-end gap-3 font-ui text-xs"><button type="button" onClick={() => setAsking(false)}>Cancel</button><button type="button" disabled={busy || !question.trim()} onClick={() => onAsk(question)}>Send to teacher</button></div>
+			</div>}
+			{onAsk && !asking && (
 				<div className="flex justify-end pt-1">
 					<button
 						type="button"
 						data-testid="reading-ask-first"
-						onClick={onAsk}
+						onClick={() => setAsking(true)}
 						className="rounded-sm px-2 py-1 font-ui text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
 						Ask a question first

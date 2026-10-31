@@ -61,6 +61,7 @@ export function subagentEngine(role: ModelRole, override?: PiEngine): PiEngine {
 }
 
 export async function runSubagent(tools: AgentTool<any, any>[], opts: SubagentRunOptions): Promise<SubagentRunResult> {
+	opts.abortSignal?.throwIfAborted();
 	const engine = subagentEngine(opts.role, opts.engine);
 	let turns = 0;
 	// Debug recorder (owner, 2026-10-04): raw provider events per job run.

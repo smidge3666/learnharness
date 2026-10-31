@@ -39,7 +39,7 @@ import { isTypingSurface } from "@/src/core";
 
 /** Overlay roots whose buttons keep native Enter (hand-rolled menus mark
  *  themselves data-lh-menu; Radix poppers/dialogs carry their own attrs). */
-const OVERLAY_ROOTS = '[data-lh-menu], [data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]';
+const OVERLAY_ROOTS = '[data-lh-menu], [data-session-workspace], [data-clarify-form], [data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]';
 
 /** Pure decision, exported for pins: does a focused BUTTON keep native
  *  Enter (true) or does Enter belong to submit (false)? */
@@ -68,6 +68,7 @@ export function useEnterSubmits(submit: () => void): void {
 			if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
 			if (isTypingSurface(e)) return;
 			const target = e.target as HTMLElement | null;
+			if (target?.closest('[data-session-workspace], [data-clarify-form]')) return;
 			if (target?.tagName === "BUTTON" && buttonKeepsNativeEnter(target)) return;
 			e.preventDefault();
 			submitRef.current();

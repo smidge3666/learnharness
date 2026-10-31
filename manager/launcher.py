@@ -217,11 +217,9 @@ class Manager:
             raise RuntimeError("Dependencies missing. Run ./learn install first.")
         if self.config["mode"] == "production" and not (self.repo / ".next/standalone/server.js").exists():
             raise RuntimeError("Production build missing. Run ./learn build first.")
-        with socket.socket() as sock:
-            try:
-                sock.bind(("127.0.0.1", self.config["port"]))
-            except OSError:
-                raise RuntimeError(f"Port {self.config['port']} is occupied; refusing to adopt an unknown server") from None
+        # A just-stopped dev server can hold the port briefly while it exits.
+        if not self.port_free(timeout=30):
+            raise RuntimeError(f"Port {self.config['port']} is occupied; refusing to adopt an unknown server")
         token = secrets.token_hex(32)
         log = open(self.state / "server.log", "ab", buffering=0)
         child = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "--repo", str(self.repo), "_serve", token],
@@ -245,10 +243,27 @@ class Manager:
             return
         for _ in range(110):
             if not self.control():
-                print("Stopped.")
-                return
+                break
             time.sleep(.1)
-        raise RuntimeError("Stop timed out; inspect server.log")
+        else:
+            raise RuntimeError("Stop timed out; inspect server.log")
+        # Next's server process can keep the port briefly after the supervisor exits.
+        if not self.port_free(timeout=30):
+            raise RuntimeError(f"Stopped, but port {self.config['port']} is still in use; wait a moment and retry")
+        print("Stopped.")
+
+    def port_free(self, timeout=0.0):
+        deadline = time.monotonic() + timeout
+        while True:
+            with socket.socket() as sock:
+                try:
+                    sock.bind(("127.0.0.1", self.config["port"]))
+                    return True
+                except OSError:
+                    pass
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(.25)
 
     def fingerprint(self):
         names = self.git("ls-files", "-z", "--cached", "--others", "--exclude-standard").split("\0")
@@ -622,9 +637,36 @@ class Manager:
         print("Opened LearnHarness using the existing installed-app profile. It owns its server and does not need the terminal manager.")
         print(f"Startup output: {self.state / 'desktop.log'}")
 
+    def wait_for_app(self, timeout=180):
+        """The supervisor being alive is NOT Next's HTTP/first-compilation readiness."""
+        print(f"Waiting for app-dev at {self.url} (first compilation can take a minute)…", flush=True)
+        deadline = time.monotonic() + timeout
+        last_error = "server has not responded"
+        while time.monotonic() < deadline:
+            state = self.control()
+            if not state or not state.get("running"):
+                raise RuntimeError("Dev server exited before the app was ready. Run ./learn logs for the startup error.")
+            if state.get("url") != self.url:
+                raise RuntimeError(f"Managed server is at {state.get('url')}, not {self.url}. Stop it before opening app-dev.")
+            try:
+                with urllib.request.urlopen(self.url, timeout=min(10, max(.1, deadline - time.monotonic()))) as response:
+                    if 200 <= response.status < 400:
+                        print("App is ready.", flush=True)
+                        return
+                    last_error = f"HTTP {response.status}"
+            except urllib.error.HTTPError as error:
+                if error.code == 500:
+                    raise RuntimeError("App compilation failed (HTTP 500). Run ./learn logs; no blank app window was opened.") from error
+                last_error = f"HTTP {error.code}"
+            except (OSError, TimeoutError) as error:
+                last_error = str(error)
+            time.sleep(.2)
+        raise RuntimeError(f"App did not become ready within {timeout}s ({last_error}). Run ./learn logs.")
+
     def open(self, target=None):
         target = target or self.config["open"]
         self.start()
+        self.wait_for_app()
         if target == "electron":
             # Always app-dev: installation must never redirect feature testing into real data.
             env = self.env() | {"LH_DEV_URL": self.url}
@@ -730,7 +772,7 @@ def tui(manager):
         for i, color in enumerate([curses.COLOR_CYAN, curses.COLOR_GREEN, curses.COLOR_YELLOW, curses.COLOR_RED], 1):
             curses.init_pair(i, color, -1)
         stdscr.timeout(1000)
-        notice = "Ready. Nothing is fetched, merged or published automatically."
+        notice = "O tests your edits · A installs them into the main app."
         page = "home"
         cached, refreshed = None, 0
         def external(fn):
@@ -747,22 +789,6 @@ def tui(manager):
             except (EOFError, KeyboardInterrupt):
                 pass
             curses.reset_prog_mode(); stdscr.clear(); refreshed = 0
-        def configure():
-            print(json.dumps(manager.config, indent=2))
-            key = input("Config key (blank cancels): ").strip()
-            if key:
-                manager.set_config(key, input("New value: ").strip())
-                manager.__init__(manager.repo)
-        def features():
-            record = manager.settings()
-            keys = list(FEATURES)
-            for i, k in enumerate(keys, 1):
-                print(f"{i:2}. {k:32} {json.dumps(setting_value(record, k, FEATURES[k]))}")
-            choice = input("Setting number (blank cancels): ").strip()
-            if choice:
-                key = keys[int(choice) - 1]
-                value = input("New JSON value (true / false / number / quoted string): ")
-                manager.setting_set(key, json.loads(value))
         def plugins():
             items = manager.plugin_list()
             for p in items:
@@ -779,8 +805,10 @@ def tui(manager):
                 print("WARNING: plugins can access ALL files, credentials and provider credits. Not sandboxed.")
                 if input("Type TRUST to enable: ") == "TRUST": manager.plugin_enable(value, True, True)
             else: raise RuntimeError("Unknown plugin action")
-        def publish():
-            manager.publish()
+        def open_dev():
+            # Opening from the dashboard refreshes the dev server as one action.
+            manager.stop()
+            manager.open("electron")
         while True:
             if time.monotonic() - refreshed > 5 or cached is None:
                 try:
@@ -816,10 +844,6 @@ def tui(manager):
                 line(f"Folder     {manager.data}")
                 ps = s.get("plugins", [])
                 line(f"Plugins    {len(ps)} installed · {sum(p['enabled'] for p in ps)} enabled · P manages")
-                heading("GitHub")
-                line("Updates    amosblomqvist/learnharness (upstream)")
-                line(f"Publish    {s.get('remote', '?')}")
-                line("U fetches only · G commits & pushes everything (secrets refused)", 3)
                 heading("Server")
                 state = s.get("server")
                 line(f"Status     {'running at ' + state['url'] if state and state.get('running') else 'stopped'}", 2 if state else 3)
@@ -827,14 +851,12 @@ def tui(manager):
                 installed = manager.desktop_paths()["executable"].is_file()
                 line(f"Installed  {'yes · LearnHarness in your app menu' if installed else 'no · press A to build and install'}", 2 if installed else 3)
                 heading("Controls")
-                line("O open app-dev  A install main app R restart dev    X stop dev")
-                line("B rebuild       T tests           C verify all     I install deps")
-                line("S app settings  P plugins         V launcher config K back up data")
-                line("U fetch updates G publish GitHub  D data folder    F code folder")
-                line("L live logs     Q quit (server stays on)           ? help / all commands")
+                line("O  open app-dev (starts/restarts automatically)")
+                line("A  install main app")
+                line("X  stop dev       P  plugins       Q  quit manager")
             line(); line(notice, 3)
-            if h < 30 or w < 72:
-                rows = rows[:max(1, h - 2)] + [("Resize terminal to 72×32+ for full dashboard · Q quits · ? help", 3)]
+            if h < 26 or w < 60:
+                rows = rows[:max(1, h - 2)] + [("Resize terminal to 60×28+ for full dashboard · Q quits", 3)]
             for y, (text, color) in enumerate(rows[:h - 1]):
                 with contextlib.suppress(curses.error):
                     stdscr.addnstr(y, 0, text, max(1, w - 1), curses.color_pair(color))
@@ -843,17 +865,7 @@ def tui(manager):
             if key < 0: continue
             if key in (ord("q"), ord("Q")): return
             char = chr(key).lower() if key < 256 else ""
-            if char == "h": page = "home"; continue
-            if char == "l": page = "logs"; continue
-            actions = {
-                "o": manager.open, "a": manager.desktop_install, "r": lambda: (manager.stop(), manager.start()), "x": manager.stop,
-                "b": manager.build, "t": lambda: run(["npm", "test"], manager.repo, manager.env()),
-                "c": manager.check, "i": lambda: run(["npm", "ci"], manager.repo, manager.env()),
-                "s": features, "p": plugins, "v": configure, "k": manager.backup,
-                "u": manager.fetch_updates,
-                "g": publish, "d": lambda: open_folder(manager.data), "f": lambda: open_folder(manager.repo),
-                "?": lambda: print(help_text()),
-            }
+            actions = {"o": open_dev, "a": manager.desktop_install, "x": manager.stop, "p": plugins}
             if char in actions: external(actions[char])
     curses.wrapper(screen)
 

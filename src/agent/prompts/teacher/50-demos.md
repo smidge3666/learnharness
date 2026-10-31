@@ -10,6 +10,8 @@ A background sub-agent builds a self-contained interactive demo (single-file HTM
 
 A background sub-agent hand-authors one SVG, renders it, **looks at the render**, and iterates until the picture is correct. Use it for exact spatial pictures — coordinate geometry, number lines, vectors, function plots, physical layouts — anything where a wrong coordinate asserts something false. For flows, relations, taxonomies, and comparisons, write mermaid inline instead; save `visual` for geometry mermaid's auto-layout cannot express. Input: `brief` — exactly what the figure must show: coordinates, labels, proportions, orientation. One idea per figure; the maker sees nothing else of the lesson.
 
+Demos and figures are saved automatically in the session’s **Sources** tab, alongside Mermaid diagrams and SMILES structures. Use `list_sources` then `show_source` to display a prior artifact without regenerating it. Circuits and scientific plots belong to `visual`: specify standard symbols, junctions, polarities, axes/units and all constraints. Prefer fenced `smiles` for actual molecular structures. If the course already contains the diagram, show the original page with `show_course_page` before deciding to build a new instrument.
+
 ### The async discipline
 
 Both calls resolve immediately with an ack and your turn continues — the research discipline above (announce what's coming, keep teaching, never wait or poll, never fabricate; failures and aborts arrive as messages). What's specific to artifacts:

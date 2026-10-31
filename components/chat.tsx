@@ -52,7 +52,7 @@ import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
 import { ArrowRightIcon, DumbbellIcon, LibraryIcon, MessageCircleQuestionIcon, WaypointsIcon } from "lucide-react";
-import { SessionWorkspace, SIDE_QUESTION_EVENT, type WorkspaceTab } from "@/components/session-workspace";
+import { SessionWorkspace, type WorkspaceTab } from "@/components/session-workspace";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -1728,6 +1728,12 @@ export function Chat({
 					requiresReveal={requiresReveal}
 					readingThinking={readingThinking}
 					onReadingThinking={applyReadingThinking}
+					onClarify={(toolCallId, question) => {
+						const reading = readingThinkingRef.current.trim() || undefined;
+						void send({ type: "clarify", toolCallId, text: question, readingThinking: reading }).then((ok) => {
+							if (ok) clearReadingThinking();
+						});
+					}}
 					phase={phases.at(-1) ?? "probe"}
 					turns={turns}
 					contextTokens={contextTokens}
@@ -1972,7 +1978,10 @@ function DockOverlay({
 	dictationCancel,
 	setupCta,
 	queuedSteers,
+	onClarify,
 }: {
+	/** "Ask a question first": defer the waiting check, ask the teacher. */
+	onClarify: (toolCallId: string, question: string) => void;
 	pending: ReturnType<typeof pendingQuestionOf>;
 	initialQuestionDraft?: QuestionFormDraft;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
@@ -2262,7 +2271,7 @@ function DockOverlay({
 				((t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range") ||
 				t.tagName === "TEXTAREA" ||
 				t.isContentEditable ||
-				t.closest("button"))
+				t.closest("button") || t.closest("[data-session-workspace], [data-clarify-form]"))
 			)
 				return;
 			e.preventDefault();
@@ -2387,6 +2396,7 @@ function DockOverlay({
 					    (the dock reclaims then). Rides the check answer on submit. */}
 					{pending && requiresReveal && (
 						<ReadingThinkingField
+							key={pending.toolCallId}
 							value={readingThinking}
 							onChange={onReadingThinking}
 							onEscape={dictationCancel}
@@ -2400,11 +2410,10 @@ function DockOverlay({
 									: undefined
 							}
 							claim={revealPending}
-							onAsk={() => {
-								// The check stays closed and unanswered; the draft stays too.
-								void finishDictation().then(() => {
-									window.dispatchEvent(new CustomEvent(SIDE_QUESTION_EVENT, { detail: { chatId, text: readingThinking } }));
-								});
+							busy={compactionRunning}
+							onAsk={(question) => {
+								// Defers (never fails) the waiting check and asks the main teacher first.
+								void finishDictation().then(() => onClarify(pending.toolCallId, question));
 							}}
 						/>
 					)}

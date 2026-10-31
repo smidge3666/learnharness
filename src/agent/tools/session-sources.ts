@@ -16,12 +16,16 @@ export function sessionSourceTools(workspace?: WorkspacePort): Record<string, Ag
 		read_course_file: {
 			name: "read_course_file", label: "Read course file", description: "Read text from selected PDF/Word/PowerPoint pages or slides. List files first. Inspect diagrams with show_course_page rather than inferring them from text.",
 			parameters: Type.Object({ fileId: Type.String(), pages: Type.String({ description: "1-based page range, e.g. 1-3 or 7" }) }),
-			execute: async (_id, input: { fileId: string; pages: string }) => toToolResult(await workspace.read(input.fileId, input.pages)),
+			execute: async (_id, params) => {
+				const input = params as { fileId: string; pages: string };
+				return toToolResult(await workspace.read(input.fileId, input.pages));
+			},
 		},
 		show_course_page: {
 			name: "show_course_page", label: "Show course page", description: "Display the ORIGINAL lecture slide/document page to the learner and inspect its rendered PNG yourself. Save it in Sources with a citation. Use when teaching from a course diagram; do not redraw it from imagination.",
 			parameters: Type.Object({ fileId: Type.String(), page: Type.Integer({ minimum: 1 }) }),
-			execute: async (_id, input: { fileId: string; page: number }) => {
+			execute: async (_id, params) => {
+				const input = params as { fileId: string; page: number };
 				const { source, png } = await workspace.show(input.fileId, input.page);
 				// details = the learner card (projected into Sources); the image is for the model to look at.
 				const result = toToolResult(source);
@@ -31,7 +35,8 @@ export function sessionSourceTools(workspace?: WorkspacePort): Record<string, Ag
 		show_source: {
 			name: "show_source", label: "Show saved source", description: "Show an existing diagram, molecule, demo or course page from this session again, without regenerating it. Get its id from list_sources.",
 			parameters: Type.Object({ sourceId: Type.String() }),
-			execute: async (_id, input: { sourceId: string }) => {
+			execute: async (_id, params) => {
+				const input = params as { sourceId: string };
 				const source = workspace.list().sources.find(s => s.id === input.sourceId);
 				if (!source) throw new Error("Source not found in this session");
 				return toToolResult(source);

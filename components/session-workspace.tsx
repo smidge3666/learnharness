@@ -1,12 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { XIcon, PaperclipIcon } from "lucide-react";
+import { XIcon, PaperclipIcon, PencilIcon } from "lucide-react";
 import { sessionSources, type CourseFile, type LhViewMessage, type SessionSource, type SideMessage } from "@/src/core";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { SessionSourceView } from "@/components/session-source";
 
 export type WorkspaceTab = "side" | "sources";
-export const SIDE_QUESTION_EVENT = "lh:side-question";
 export interface SideConversation { messages: SideMessage[]; draft: string }
 const EMPTY_SIDE: SideConversation = { messages: [], draft: "" };
 export function SessionWorkspace({ chatId, messages, tab, setTab }: {
@@ -15,6 +14,8 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 	const [side, setSide] = useState<SideConversation>(EMPTY_SIDE);
 	const [files, setFiles] = useState<CourseFile[]>([]);
 	const [saved, setSaved] = useState<SessionSource[]>([]);
+	const [names, setNames] = useState<Record<string, string>>({});
+	const [renaming, setRenaming] = useState<{ id: string; title: string } | null>(null);
 	const [busy, setBusy] = useState(false), [uploading, setUploading] = useState(false), [error, setError] = useState("");
 	const [selected, setSelected] = useState<SessionSource | null>(null);
 	const cancel = useRef<AbortController | null>(null);
@@ -23,25 +24,17 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 	const base = `/api/chats/${chatId}/workspace`;
 	useEffect(() => {
 		setSide(EMPTY_SIDE); setSelected(null); setError("");
-		return () => { cancel.current?.abort(); }; // leaving the session discards side history
+		return () => { cancel.current?.abort(); cancel.current = null; }; // leaving the session discards side history
 	}, [chatId]);
 	useEffect(() => {
-		const handler = (e: Event) => {
-			const d = (e as CustomEvent<{ chatId: string; text?: string }>).detail;
-			if (d.chatId !== chatId) return;
-			setTab("side");
-			if (d.text) setSide(s => ({ ...s, draft: d.text! }));
-		};
-		window.addEventListener(SIDE_QUESTION_EVENT, handler);
-		return () => window.removeEventListener(SIDE_QUESTION_EVENT, handler);
-	}, [chatId, setTab]);
-	useEffect(() => {
-		let closed = false;
+		let closed = false, fetching = false;
 		const refresh = async () => {
+			if (fetching) return; fetching = true;
 			try {
 				const r = await fetch(base); const b = await r.json(); if (!r.ok) throw new Error(b.error);
-				if (!closed) { setFiles(b.files); setSaved(b.sources); }
+				if (!closed) { setFiles(b.files); setSaved(b.sources); setNames(b.names ?? {}); }
 			} catch (e) { if (!closed) setError(String(e)); }
+			finally { fetching = false; }
 		};
 		void refresh();
 		const timer = setInterval(() => void refresh(), 4000);
@@ -71,9 +64,22 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 			}
 		} catch (e) { setError(String(e)); } finally { setUploading(false); }
 	}
-	const sources = [...new Map([...saved, ...sessionSources(messages)].map(s => [s.id, s])).values()];
+	async function rename(id: string, title: string) {
+		setRenaming(null); setError("");
+		const previous = names;
+		setNames(n => { const next = { ...n }; if (title.trim()) next[id] = title.trim(); else delete next[id]; return next; });
+		try {
+			const r = await fetch(`${base}/sources/${encodeURIComponent(id)}`, { method: "PATCH",
+				headers: { "content-type": "application/json", "x-lh-workspace": "1" }, body: JSON.stringify({ title }) });
+			const b = await r.json(); if (!r.ok) throw new Error(b.error);
+			setNames(b.names);
+		} catch (e) { setNames(previous); setError(String(e)); }
+	}
+	// Learner renames win over both saved and live-derived titles.
+	const sources = [...new Map([...saved, ...sessionSources(messages)].map(s => [s.id, s])).values()]
+		.map(s => names[s.id] ? { ...s, title: names[s.id]! } : s);
 	if (!tab) return null;
-	return <aside aria-label="Session workspace" className="fixed inset-y-0 right-0 z-40 flex w-[min(460px,100vw)] flex-col border-l border-border bg-background shadow-lg lg:static lg:shrink-0 lg:shadow-none">
+	return <aside data-session-workspace="" aria-label="Session workspace" className="fixed inset-y-0 right-0 z-40 flex w-[min(460px,100vw)] flex-col border-l border-border bg-background shadow-lg lg:static lg:shrink-0 lg:shadow-none">
 		<header className="flex h-15 shrink-0 items-center gap-4 border-b border-border px-4 font-ui text-xs">
 			{(["side", "sources"] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)} className={tab === t ? "text-foreground" : "text-muted-foreground"}>{t === "side" ? "Side questions" : "Sources"}</button>)}
 			<button className="ml-auto p-1" aria-label="Close session workspace" onClick={() => setTab(null)}><XIcon className="size-4" /></button>
@@ -87,7 +93,7 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 			</div>
 			<div className="space-y-2 border-t border-border p-4">
 				<textarea aria-label="Side question" className="lh-input min-h-20 w-full resize-y rounded-xl border bg-card px-3 py-2 outline-none" placeholder="Ask without interrupting the lesson…" value={side.draft} onChange={e => setSide(s => ({ ...s, draft: e.target.value }))} onKeyDown={e => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-				<div className="flex justify-between font-ui text-xs"><button onClick={() => { cancel.current?.abort(); setSide(EMPTY_SIDE); setBusy(false); }}>Clear conversation</button><button disabled={busy || !side.draft.trim()} onClick={() => void send()}>Send</button></div>
+				<div className="flex justify-between font-ui text-xs"><button onClick={() => { cancel.current?.abort(); cancel.current = null; setSide(EMPTY_SIDE); setBusy(false); }}>Clear conversation</button><button disabled={busy || !side.draft.trim()} onClick={() => void send()}>Send</button></div>
 			</div>
 		</> : <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4" onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); void upload(e.dataTransfer.files); }}>
 			<input ref={fileInput} className="hidden" type="file" multiple accept=".pdf,.docx,.pptx" onChange={e => { if (e.target.files) void upload(e.target.files); e.target.value = ""; }} />
@@ -100,7 +106,16 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 			{selected && <section><div className="flex justify-between text-xs"><span>{selected.title}</span><button onClick={() => setSelected(null)}>Close preview</button></div><SessionSourceView source={selected} /></section>}
 			<h3 className="font-ui text-xs uppercase tracking-wide text-muted-foreground">Saved in this session</h3>
 			{!sources.length && <p className="text-sm text-muted-foreground">Demos, diagrams, chemical structures and displayed course pages will appear here.</p>}
-			{sources.map(s => <details key={s.id} className="border-b border-border py-2"><summary className="cursor-pointer text-sm">{s.title}</summary><SessionSourceView source={s} /></details>)}
+			{sources.map(s => renaming?.id === s.id
+				? <form key={s.id} className="flex items-center gap-2 border-b border-border py-2" onSubmit={e => { e.preventDefault(); void rename(s.id, renaming.title); }}>
+					<input autoFocus aria-label="Source name" maxLength={120} className="lh-input min-w-0 flex-1 rounded-sm border bg-card px-2 py-1 text-sm outline-none" value={renaming.title}
+						onChange={e => setRenaming({ id: s.id, title: e.target.value })} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape") setRenaming(null); }} />
+					<button type="submit" className="font-ui text-xs">Save</button>
+					<button type="button" className="font-ui text-xs text-muted-foreground" onClick={() => setRenaming(null)}>Cancel</button>
+				</form>
+				: <details key={s.id} className="group border-b border-border py-2"><summary className="flex cursor-pointer items-center gap-2 text-sm"><span className="min-w-0 flex-1 truncate">{s.title}</span>
+					<button type="button" aria-label={`Rename ${s.title}`} title="Rename (leave empty to restore the original name)" className="p-1 text-muted-foreground opacity-60 hover:text-foreground hover:opacity-100"
+						onClick={e => { e.preventDefault(); e.stopPropagation(); setRenaming({ id: s.id, title: s.title }); }}><PencilIcon className="size-3.5" /></button></summary><SessionSourceView source={s} /></details>)}
 		</div>}
 	</aside>;
 }

@@ -87,6 +87,10 @@ function fixture({ packaged = true, updaterMissing = false, managedInstall = fal
 	const context = createContext({
 		require: (id: string) => {
 			if (id === "electron") return electron;
+			if (id === "node:http") return { get: (_url: string, ready: (res: unknown) => void) => {
+				ready({ statusCode: 200, resume() {} });
+				return { on() {} };
+			} };
 			if (id === "electron-updater") {
 				if (updaterMissing) throw new Error("missing updater");
 				return { autoUpdater: updater };

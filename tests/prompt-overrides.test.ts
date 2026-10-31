@@ -184,9 +184,11 @@ describe("the source-derived segment list", () => {
 				"shared/20-question-tools.md",
 				"shared/25-confidence.md",
 				"shared/30-learner-files.md",
+				"shared/35-course-sources.md",
 				"shared/40-formatting.md",
 			],
 		);
+		assert.equal(teacher.some((s) => s.path === "teacher/35-clarifications.md"), true);
 		assert.equal(teacher.some((s) => s.path === "teacher/05-method.md"), true);
 		assert.equal(teacher.some((s) => s.path === "teacher/10-planning.md"), true);
 		assert.equal(teacher.some((s) => s.path === "teacher/60-probing-in-brief.md"), false);
