@@ -380,6 +380,25 @@ export interface MdRenderingSettings {
 	italicColor?: string | null;
 }
 
+/** SMILES structure rendering (owner, 2026-10-31). The governing rule is
+ *  that a drawing's TEXT must read at the same size as the prose around
+ *  it: the drawer is given fontSize = (reading size x atomScale/100) /
+ *  scale, because its own output multiplies font size by `scale`. That
+ *  keeps a two-atom molecule from rendering as giant letters while a long
+ *  chain stays legible. */
+export interface SmilesSettings {
+	/** Bond spread / overall drawing scale, 0.5-3 (default 1.2). */
+	scale?: number;
+	/** Bond line thickness in drawer units, 0.5-4 (default 1.6). */
+	bondThickness?: number;
+	/** Atom label size as a PERCENT of the reading text (60-200, default
+	 *  100 = exactly the prose size). Named textPercent, not fontSize: the
+	 *  old fontSize was drawer units (8-32), and reusing the key would have
+	 *  silently reinterpreted stored values — a stored 15 would have become
+	 *  15% instead of ~100%. Absent in old records = the default. */
+	textPercent?: number;
+}
+
 /** Appearance settings — mode, colors, type, markdown emphasis. */
 export interface AppearanceSettings {
 	/** "dark" | "light" (default dark). */
@@ -396,6 +415,15 @@ export interface AppearanceSettings {
 	/** Session names in CMU Serif (default true — today's look). */
 	sessionNameSerif?: boolean;
 	mdRendering?: MdRenderingSettings;
+	/** Reading column width in px (owner, 2026-10-31): the measure teaching
+	 *  prose wraps at. 0 = full width (the old max-w-none behaviour). */
+	textMargin?: number;
+	/** Figures (course pages, drawn diagrams, web images) inside teaching
+	 *  prose, as a PERCENT of the reading column (owner, 2026-10-31): they
+	 *  arrive at this fraction and expand to 100% when clicked. */
+	imageSize?: number;
+	/** SMILES structure drawing knobs (owner, 2026-10-31). */
+	smiles?: SmilesSettings;
 }
 
 /** Knowledge-graph settings — a strict dependency ladder (owner decision
@@ -485,6 +513,25 @@ export interface UserSettings {
  *  all the way down): the chat section and every slot stay empty until the
  *  user picks, and the per-need gates refuse honestly; tools default on;
  *  prompts default off — hence their absence here. */
+/** Reading column: 0 = full width, otherwise a px measure. Exported for the
+ *  settings UI and the PUT parser (both must name the same bounds). */
+export const TEXT_MARGIN_MIN = 0;
+export const TEXT_MARGIN_MAX = 1600;
+export const TEXT_MARGIN_DEFAULT = 0;
+export const IMAGE_SIZE_MIN = 25;
+export const IMAGE_SIZE_MAX = 100;
+export const IMAGE_SIZE_DEFAULT = 75;
+export const SMILES_SCALE_MIN = 0.5;
+export const SMILES_SCALE_MAX = 3;
+export const SMILES_THICKNESS_MIN = 0.5;
+export const SMILES_THICKNESS_MAX = 4;
+/** Percent of the reading text (100 = identical size). */
+export const SMILES_TEXT_MIN = 60;
+export const SMILES_TEXT_MAX = 200;
+export const SMILES_TEXT_DEFAULT = 100;
+export const SMILES_SCALE_DEFAULT = 1.2;
+export const SMILES_THICKNESS_DEFAULT = 1.6;
+
 export interface FactorySettings {
 	version: number;
 	general: Required<GeneralSettings>;
@@ -495,6 +542,9 @@ export interface FactorySettings {
 		fontFamily: string | null;
 		proseFontSize: number;
 		sessionNameSerif: boolean;
+		textMargin: number;
+		imageSize: number;
+		smiles: Required<SmilesSettings>;
 		mdRendering: {
 			headingWeight: number;
 			boldColor: string | null;
@@ -516,6 +566,9 @@ export const FACTORY_SETTINGS: FactorySettings = {
 		proseFontSize: 16,
 		sessionNameSerif: true,
 		mdRendering: { headingWeight: 900, boldColor: null, italicColor: null },
+		textMargin: TEXT_MARGIN_DEFAULT,
+		imageSize: IMAGE_SIZE_DEFAULT,
+		smiles: { scale: SMILES_SCALE_DEFAULT, bondThickness: SMILES_THICKNESS_DEFAULT, textPercent: SMILES_TEXT_DEFAULT },
 	},
 	graph: { enabled: true, rendering: true, extractionChunkTokens: 4096 },
 	compaction: { thresholdTokens: 150_000 },
@@ -530,6 +583,20 @@ export const EXTRACTION_CHUNK_TOKENS_FLOOR = 500;
 
 const PROSE_FONT_MIN = 12;
 const PROSE_FONT_MAX = 24;
+function sanitizeSmiles(raw: unknown): SmilesSettings {
+	const r = (raw ?? {}) as Record<string, unknown>;
+	const out: SmilesSettings = {};
+	if (typeof r.scale === "number" && Number.isFinite(r.scale)) {
+		out.scale = clamp(Math.round(r.scale * 100) / 100, SMILES_SCALE_MIN, SMILES_SCALE_MAX);
+	}
+	if (typeof r.bondThickness === "number" && Number.isFinite(r.bondThickness)) {
+		out.bondThickness = clamp(Math.round(r.bondThickness * 100) / 100, SMILES_THICKNESS_MIN, SMILES_THICKNESS_MAX);
+	}
+	if (typeof r.textPercent === "number" && Number.isFinite(r.textPercent)) {
+		out.textPercent = clamp(Math.round(r.textPercent), SMILES_TEXT_MIN, SMILES_TEXT_MAX);
+	}
+	return out;
+}
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
@@ -746,6 +813,13 @@ function sanitizeAppearance(raw: Record<string, unknown>): AppearanceSettings {
 	}
 	const sessionNameSerif = boolOrDrop(raw.sessionNameSerif);
 	if (sessionNameSerif !== undefined) out.sessionNameSerif = sessionNameSerif;
+	if (typeof raw.textMargin === "number" && Number.isFinite(raw.textMargin)) {
+		out.textMargin = clamp(Math.round(raw.textMargin), TEXT_MARGIN_MIN, TEXT_MARGIN_MAX);
+	}
+	if (typeof raw.imageSize === "number" && Number.isFinite(raw.imageSize)) {
+		out.imageSize = clamp(Math.round(raw.imageSize), IMAGE_SIZE_MIN, IMAGE_SIZE_MAX);
+	}
+	if (raw.smiles !== undefined) out.smiles = sanitizeSmiles(raw.smiles);
 	if (raw.mdRendering !== undefined) out.mdRendering = sanitizeMdRendering(raw.mdRendering);
 	return out;
 }

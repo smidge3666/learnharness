@@ -103,7 +103,13 @@ describe("appearanceVars — the mapping the provider applies", () => {
 	it("sessionNameSerif false alone: titles move, nothing else does", () => {
 		const vars = appearanceVars(resolveAppearance({ sessionNameSerif: false }));
 		assert.equal(vars["--font-title"], "var(--font-prose)");
-		assert.equal(Object.keys(vars).length, 3, "prose-size, heading-weight, font-title only");
+		// The column/figure/SMILES vars are always set (owner, 2026-10-31): they
+		// are the settings' delivery channel, so a serif toggle must not be the
+		// only thing in the map. The assertion is that NOTHING ELSE moved.
+		assert.deepEqual(
+			Object.keys(vars).sort(),
+			["--lh-heading-weight", "--lh-image-size", "--lh-prose-size", "--lh-smiles-font", "--lh-smiles-scale", "--lh-smiles-thickness", "--lh-text-margin", "--font-title"].sort(),
+		);
 	});
 });
 

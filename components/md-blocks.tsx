@@ -40,6 +40,7 @@ import type { ExtraProps } from "streamdown";
 import { MERMAID_FONT_SIZE, renderMermaid } from "@/components/mermaid-render";
 import { MermaidError } from "@/components/mermaid-error";
 import { ChemicalStructure } from "@/components/chemical-structure";
+import { ExpandableFigure } from "@/components/expandable-figure";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { chartSize, useSessionMermaid } from "@/components/session-overlay";
 import { Hint } from "@/components/ui/hint";
@@ -465,8 +466,26 @@ export function MarkdownStrong(props: ComponentProps<"strong"> & ExtraProps) {
 	);
 }
 
+/** A prose image (owner, 2026-10-31): teaching figures arrive at the
+ *  configured share of the reading column and expand to full width on
+ *  click — the same law as course pages and question figures. Streamdown
+ *  hands us the parsed <img>; we re-render it inside the toggle. */
+export function MarkdownImg({ src, alt, title }: ComponentProps<"img"> & ExtraProps) {
+	if (!src) return null;
+	return (
+		<span className="my-4 block" data-streamdown="img">
+			<ExpandableFigure label={`Expand ${alt || "figure"}`}>
+				{/* eslint-disable-next-line @next/next/no-img-element */}
+				<img src={src} alt={alt ?? ""} title={title} referrerPolicy="no-referrer" loading="lazy" />
+			</ExpandableFigure>
+			{title ? <span className="mt-2 block text-center text-xs text-muted-foreground">{title}</span> : null}
+		</span>
+	);
+}
+
 export const mdComponents = {
 	code: MarkdownCode,
+	img: MarkdownImg,
 	table: MarkdownTable,
 	span: MathDisplay,
 	strong: MarkdownStrong,

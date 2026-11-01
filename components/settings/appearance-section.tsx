@@ -34,6 +34,16 @@ import { useEffect, useRef, useState } from "react";
 import {
 	EXTRACTION_CHUNK_TOKENS_FLOOR,
 	resolveSettings,
+	TEXT_MARGIN_MAX,
+	TEXT_MARGIN_MIN,
+	IMAGE_SIZE_MAX,
+	IMAGE_SIZE_MIN,
+	SMILES_SCALE_MIN,
+	SMILES_SCALE_MAX,
+	SMILES_THICKNESS_MIN,
+	SMILES_THICKNESS_MAX,
+	SMILES_TEXT_MIN,
+	SMILES_TEXT_MAX,
 	type AppearanceSettings,
 	type GraphSettings,
 } from "@/src/core";
@@ -278,6 +288,128 @@ export function AppearanceSection({
 						const n = Number(v);
 						if (!Number.isFinite(n)) return; // bad input: no write, factory stays
 						onSectionChange({ ...appearance, proseFontSize: Math.min(24, Math.max(12, Math.round(n))) });
+					}}
+				/>
+			</SettingsRow>
+			{/* Reading column + figures (owner, 2026-10-31). Both are px/percent
+			    numbers; empty means the factory value, and the hint always shows
+			    what is actually in effect. */}
+			<SettingsRow
+				label="Text margin"
+				hint={resolved.textMargin > 0 ? `${resolved.textMargin}px wide` : "Full width"}
+				testid="row-text-margin"
+			>
+				<CommitInput
+					type="number"
+					value={String(appearance?.textMargin ?? "")}
+					placeholder={String(resolved.textMargin)}
+					ariaLabel="text margin"
+					testid="input-text-margin"
+					onCommit={(v) => {
+						if (v === "") {
+							onSectionChange({ ...appearance, textMargin: undefined });
+							return;
+						}
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						onSectionChange({ ...appearance, textMargin: Math.min(TEXT_MARGIN_MAX, Math.max(TEXT_MARGIN_MIN, Math.round(n))) });
+					}}
+				/>
+			</SettingsRow>
+			<SettingsRow
+				label="Image size"
+				hint={`${resolved.imageSize}% of the column · click to expand`}
+				testid="row-image-size"
+			>
+				<CommitInput
+					type="number"
+					value={String(appearance?.imageSize ?? "")}
+					placeholder={String(resolved.imageSize)}
+					ariaLabel="image size"
+					testid="input-image-size"
+					onCommit={(v) => {
+						if (v === "") {
+							onSectionChange({ ...appearance, imageSize: undefined });
+							return;
+						}
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						onSectionChange({ ...appearance, imageSize: Math.min(IMAGE_SIZE_MAX, Math.max(IMAGE_SIZE_MIN, Math.round(n))) });
+					}}
+				/>
+			</SettingsRow>
+			<SettingsRow
+				label="Structure scale"
+				hint={`${resolved.smiles.scale}×`}
+				testid="row-smiles-scale"
+			>
+				<CommitInput
+					type="number"
+					value={String(appearance?.smiles?.scale ?? "")}
+					placeholder={String(resolved.smiles.scale)}
+					ariaLabel="structure scale"
+					testid="input-smiles-scale"
+					onCommit={(v) => {
+						if (v === "") {
+							onSectionChange({ ...appearance, smiles: { ...appearance?.smiles, scale: undefined } });
+							return;
+						}
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						onSectionChange({
+							...appearance,
+							smiles: { ...appearance?.smiles, scale: Math.min(SMILES_SCALE_MAX, Math.max(SMILES_SCALE_MIN, n)) },
+						});
+					}}
+				/>
+			</SettingsRow>
+			<SettingsRow
+				label="Structure bond thickness"
+				hint={`${resolved.smiles.bondThickness}`}
+				testid="row-smiles-thickness"
+			>
+				<CommitInput
+					type="number"
+					value={String(appearance?.smiles?.bondThickness ?? "")}
+					placeholder={String(resolved.smiles.bondThickness)}
+					ariaLabel="structure bond thickness"
+					testid="input-smiles-thickness"
+					onCommit={(v) => {
+						if (v === "") {
+							onSectionChange({ ...appearance, smiles: { ...appearance?.smiles, bondThickness: undefined } });
+							return;
+						}
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						onSectionChange({
+							...appearance,
+							smiles: { ...appearance?.smiles, bondThickness: Math.min(SMILES_THICKNESS_MAX, Math.max(SMILES_THICKNESS_MIN, n)) },
+						});
+					}}
+				/>
+			</SettingsRow>
+			<SettingsRow
+				label="Structure atom size"
+				hint={`${resolved.smiles.textPercent}% of reading text`}
+				testid="row-smiles-font"
+			>
+				<CommitInput
+					type="number"
+					value={String(appearance?.smiles?.textPercent ?? "")}
+					placeholder={String(resolved.smiles.textPercent)}
+					ariaLabel="structure atom size"
+					testid="input-smiles-font"
+					onCommit={(v) => {
+						if (v === "") {
+							onSectionChange({ ...appearance, smiles: { ...appearance?.smiles, textPercent: undefined } });
+							return;
+						}
+						const n = Number(v);
+						if (!Number.isFinite(n)) return;
+						onSectionChange({
+							...appearance,
+							smiles: { ...appearance?.smiles, textPercent: Math.min(SMILES_TEXT_MAX, Math.max(SMILES_TEXT_MIN, Math.round(n))) },
+						});
 					}}
 				/>
 			</SettingsRow>

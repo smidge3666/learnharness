@@ -79,10 +79,23 @@ for (const extra of ["dist", path.join("node_modules", "electron")]) {
 
 // 3) Sanity: the runtime-read prompt assets must be present (the teacher
 //    agent reads them from disk at request time).
-for (const asset of [
-	path.join("src", "agent", "system-prompt.md"),
-	path.join("src", "agent", "prompts", "teacher", "20-teaching.md"),
-]) {
+// Every prompt file read from disk at request time must survive the trace.
+// These are discovered, not listed by hand: a new prompt that is not traced
+// ships a server that throws on first use (owner, 2026-10-31).
+const promptDir = path.join("src", "agent", "prompts");
+const promptAssets = [];
+for (const walk of [path.join("src", "agent", "system-prompt.md"), promptDir]) {
+	const walkDir = (dir) => {
+		for (const entry of fs.readdirSync(path.join(STANDALONE, dir), { withFileTypes: true })) {
+			const rel = path.join(dir, entry.name);
+			if (entry.isDirectory()) walkDir(rel);
+			else if (entry.name.endsWith(".md")) promptAssets.push(rel);
+		}
+	};
+	if (walk.endsWith(".md")) promptAssets.push(walk);
+	else if (exists(path.join(STANDALONE, walk))) walkDir(walk);
+}
+for (const asset of promptAssets) {
 	if (!exists(path.join(STANDALONE, asset))) {
 		console.error(`[build-server] prompt asset missing from the trace: ${asset}`);
 		process.exit(1);

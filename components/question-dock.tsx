@@ -8,6 +8,7 @@ import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { ToolContentResponse } from "@/components/ai-elements/message";
+import { QuestionFigure } from "@/components/question-figure";
 import { cn } from "@/lib/utils";
 import {
 	buildAnswer,
@@ -78,6 +79,8 @@ export interface QuestionDockProps {
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
+	/** The session id, for a question's figure URL (course page images are per-session). */
+	chatId?: string;
 	/** Escape in a question field stops dictation (STT wave) — threaded
 	 *  from the page that owns the dictation hook. */
 	onEscape?: () => void;
@@ -110,6 +113,7 @@ export function QuestionDock({
 	initialDraft,
 	onSaveDraft,
 	onEscape,
+	chatId,
 	phase = "probe",
 	dictationClaim = true,
 	compactionRunning = false,
@@ -163,6 +167,7 @@ export function QuestionDock({
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
 					onEscape={onEscape}
+					chatId={chatId}
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
 				/>
@@ -260,6 +265,7 @@ function QuestionDockForm({
 	initialDraft,
 	onSaveDraft,
 	onEscape,
+	chatId,
 	dictationClaim = true,
 	compactionRunning = false,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
@@ -296,6 +302,7 @@ function QuestionDockForm({
 			questionType: kind === "quiz" ? normalizeQuizType((input as { type?: unknown }).type) : undefined,
 			question: input.question,
 			context: input.details,
+			figure: input.figure,
 			mode,
 			options: ordered,
 			createdAt: new Date().toISOString(),
@@ -578,6 +585,10 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
+				{/* A question may carry a picture to look at (owner, 2026-10-31):
+				    a course slide region or a source already in this session. The
+				    figure sits ABOVE the question — he looks, then reads. */}
+				{qd.figure && chatId && <QuestionFigure figure={qd.figure} chatId={chatId} />}
 				<div className="mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>

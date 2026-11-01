@@ -185,6 +185,46 @@ body {
 	font-family: var(--font-ui);
 }
 
+/* Reading column (owner, 2026-10-31): the measure teaching prose wraps at.
+   --lh-text-margin is "none" (full width, the old behaviour) or a px value
+   set from Appearance settings. */
+.lh-reading-column {
+	max-width: var(--lh-text-margin, none);
+	margin-inline: auto;
+	width: 100%;
+}
+
+/* Figures inside prose (owner, 2026-10-31): arrive at --lh-image-size (75%
+   by default) of the reading column and expand to its full width when
+   clicked. The button IS the figure box, so the whole picture is the hit
+   area and keyboard users get it too. */
+.lh-figure {
+	width: var(--lh-image-size, 75%);
+	margin-inline: auto;
+	display: block;
+	border: 0;
+	background: none;
+	padding: 0;
+	text-align: inherit;
+	cursor: zoom-in;
+	transition: width 160ms ease;
+}
+.lh-figure[data-expanded="true"] {
+	width: 100%;
+	cursor: zoom-out;
+}
+.lh-figure img,
+.lh-figure svg {
+	width: 100%;
+	height: auto;
+	max-height: 70vh;
+	object-fit: contain;
+	display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+	.lh-figure { transition: none; }
+}
+
 /* Teaching prose (the markdown renderer's container gets .lh-prose):
    Source Sans 3 with the size/leading tokens; emphasis color bound to
    the settings-ready tokens. */

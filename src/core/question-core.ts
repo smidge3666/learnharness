@@ -19,6 +19,7 @@
 
 import { Type, type Static } from "typebox";
 import { stripModelValueDebris } from "./value-debris.ts";
+import type { SessionSource } from "./session-workspace.ts";
 
 // ─── shared types ───────────────────────────────────────────────────────────
 
@@ -155,6 +156,61 @@ export function quizInputProblems(input: {
 // and reasoning happens BEFORE the answer is chosen — models emit tool
 // args in schema order, so explanation sits immediately BEFORE correctAnswer.
 // (All consumers read by key; the order is authoring guidance, nothing else.)
+/** A figure shown WITH a question (owner, 2026-10-31): the question may
+ *  carry a picture the learner must look at. Two sources, both already in
+ *  the session: a course-file page region (`fileId`+`page`, optional crop)
+ *  or a saved/drawn source (`sourceId`). The dock renders it above the
+ *  question; the model does NOT re-read it (it has already seen the page
+ *  via show_course_page, or drew the diagram itself). */
+export const questionFigureSchema = Type.Optional(
+	Type.Object({
+		fileId: Type.Optional(Type.String({ description: "Course file id from list_sources (with `page`)." })),
+		page: Type.Optional(Type.Integer({ minimum: 1, description: "1-based page/slide of that course file." })),
+		sourceId: Type.Optional(Type.String({ description: "A saved source id from list_sources (a drawn diagram, molecule, demo or shown page)." })),
+		crop: Type.Optional(
+			Type.Object({
+				x: Type.Number({ minimum: 0, maximum: 1 }),
+				y: Type.Number({ minimum: 0, maximum: 1 }),
+				w: Type.Number({ minimum: 0.02, maximum: 1 }),
+				h: Type.Number({ minimum: 0.02, maximum: 1 }),
+			}, {
+				description:
+					"Optional region of the page as fractions of its width/height (0-1), origin top-left. Crop to the ONE diagram the question is about — do not show a whole slide with six figures.",
+			}),
+		),
+		caption: Type.Optional(Type.String({ description: "Short caption shown under the figure (e.g. 'Figure B')." })),
+	}, {
+		description:
+			"Optional figure the question refers to. Use `sourceId` for something already in this session, or `fileId`+`page` for a course slide — add `crop` to frame just the diagram the question is about. Omit for text-only questions.",
+	}),
+);
+
+/** Resolve a question figure into a renderable source + an <img> URL.
+ *  Pure so both the dock and the server agree on the same rule. */
+export function questionFigureSource(
+	figure: { fileId?: string; page?: number; sourceId?: string; crop?: { x: number; y: number; w: number; h: number }; caption?: string } | undefined,
+	base: string,
+	lookup?: (id: string) => SessionSource | undefined,
+): SessionSource | undefined {
+	if (!figure) return;
+	if (figure.sourceId) {
+		const found = lookup?.(figure.sourceId);
+		return found ? { ...found, title: figure.caption ?? found.title } : undefined;
+	}
+	if (figure.fileId && figure.page) {
+		const crop = figure.crop;
+		const query = crop ? `?crop=${[crop.x, crop.y, crop.w, crop.h].map(n => Math.round(n * 1000) / 1000).join(",")}` : "";
+		return {
+			id: `${figure.fileId}-p${figure.page}${query}`,
+			kind: "page",
+			title: figure.caption ?? `Page ${figure.page}`,
+			citation: figure.caption,
+			url: `${base}/files/${figure.fileId}/page/${figure.page}${query}`,
+		};
+	}
+	return;
+}
+
 export const quizInputBase = Type.Object({
 	question: Type.String({
 		description:
@@ -190,6 +246,7 @@ export const quizInputBase = Type.Object({
 	details: Type.Optional(
 		Type.String({ description: "Optional extra context or instructions shown under the question." }),
 	),
+	figure: questionFigureSchema,
 });
 
 // The TEACH-side quiz object: the shared base + the plan-position field
@@ -315,6 +372,7 @@ export const explainInputBase = Type.Object({
 	details: Type.Optional(
 		Type.String({ description: "Optional extra context or instructions shown under the question." }),
 	),
+	figure: questionFigureSchema,
 });
 
 /** The TEACH-side explain object: base + the plan-position field (same
@@ -364,6 +422,8 @@ export const QUIZ_TOOL_NAMES = ["quiz", "explain"] as const;
 /** The TEACHER's quiz declaration (base + the position field). */
 export const quizInputSchema = quizInputObject;
 
+export type QuestionFigure = Static<typeof questionFigureSchema>;
+
 export const askInputSchema = Type.Object({
 	// No `mode` param — the pi original has none: the mode is inferred from
 	// whether options are present (the dock does exactly this). One less
@@ -372,6 +432,7 @@ export const askInputSchema = Type.Object({
 		description:
 			"The single question to ask the learner. ONE question per turn: ask, then end your turn — the answer determines the next question.",
 	}),
+	figure: questionFigureSchema,
 	details: Type.Optional(
 		Type.String({ description: "Optional extra context or instructions shown under the question." }),
 	),
@@ -419,6 +480,8 @@ export interface QuestionData {
 	questionType?: QuizQuestionType;
 	question: string;
 	context?: string;
+	/** Optional picture the question is about (a course slide region or a saved source). */
+	figure?: QuestionFigure;
 	mode: QuestionMode;
 	options: QuizOption[]; // display order (post-shuffle)
 	// quiz only. NEVER send to the client before answering:

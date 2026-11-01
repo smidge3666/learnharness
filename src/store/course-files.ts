@@ -4,8 +4,7 @@ import { randomUUID } from "node:crypto";
 import { PATHS } from "../../config.ts";
 import type { CourseFile, SessionSource } from "../core/session-workspace.ts";
 
-export function createCourseStore(root = path.join(PATHS.data, "course-files")) {
-	const dir = (chatId: string) => {
+export function createCourseStore(root = path.join(PATHS.data, "course-files")) {	const dir = (chatId: string) => {
 		if (!/^[A-Za-z0-9_-]+$/.test(chatId)) throw new Error("Invalid session id");
 		return path.join(root, chatId);
 	};
@@ -38,8 +37,7 @@ export function createCourseStore(root = path.join(PATHS.data, "course-files")) 
 		update(chatId: string, file: CourseFile) { write(path.join(fileDir(chatId, file.id), "meta.json"), file); },
 		dir: fileDir,
 		sources(chatId: string): SessionSource[] { return read(path.join(dir(chatId), "sources.json"), []); },
-		/** Learner-chosen titles; keyed by source id so derived (unsaved) sources can be renamed too. */
-		names(chatId: string): Record<string, string> { return read(path.join(dir(chatId), "source-names.json"), {}); },
+		/** Learner-chosen titles; keyed by source id so derived (unsaved) sources can be renamed too. */		names(chatId: string): Record<string, string> { return read(path.join(dir(chatId), "source-names.json"), {}); },
 		rename(chatId: string, id: string, title: string) {
 			if (typeof id !== "string" || !id || id.length > 200) throw new Error("Invalid source");
 			const name = typeof title === "string" ? title.trim() : "";

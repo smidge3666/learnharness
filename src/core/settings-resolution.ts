@@ -208,6 +208,13 @@ export function resolveSettings(record: UserSettings | null): EffectiveSettings 
 			fontFamily: appearance.fontFamily ?? factoryAppearance.fontFamily,
 			proseFontSize: appearance.proseFontSize ?? factoryAppearance.proseFontSize,
 			sessionNameSerif: appearance.sessionNameSerif ?? factoryAppearance.sessionNameSerif,
+			textMargin: appearance.textMargin ?? factoryAppearance.textMargin,
+			imageSize: appearance.imageSize ?? factoryAppearance.imageSize,
+			smiles: {
+				scale: appearance.smiles?.scale ?? factoryAppearance.smiles!.scale!,
+				bondThickness: appearance.smiles?.bondThickness ?? factoryAppearance.smiles!.bondThickness!,
+				textPercent: appearance.smiles?.textPercent ?? factoryAppearance.smiles!.textPercent!,
+			},
 			mdRendering: {
 				headingWeight: md.headingWeight ?? factoryMd.headingWeight,
 				boldColor: md.boldColor ?? factoryMd.boldColor,

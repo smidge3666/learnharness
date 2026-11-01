@@ -25,8 +25,9 @@ import type {
 	ModelsSettings,
 	ModelSlot,
 	RoleModelOverride,
+	SmilesSettings,
 } from "../core/settings.ts";
-import { BACKGROUND_MODEL_ROLES, CACHE_RETENTIONS, COMPACTION_THRESHOLD_FLOOR, CUSTOM_MODEL_PIN_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, MODEL_SLOTS } from "../core/settings.ts";
+import { BACKGROUND_MODEL_ROLES, CACHE_RETENTIONS, COMPACTION_THRESHOLD_FLOOR, CUSTOM_MODEL_PIN_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, MODEL_SLOTS, TEXT_MARGIN_MIN, TEXT_MARGIN_MAX, IMAGE_SIZE_MIN, IMAGE_SIZE_MAX, SMILES_SCALE_MIN, SMILES_SCALE_MAX, SMILES_THICKNESS_MIN, SMILES_THICKNESS_MAX, SMILES_TEXT_MIN, SMILES_TEXT_MAX } from "../core/settings.ts";
 import { WRITABLE_TOOL_KEYS } from "../core/pending.ts";
 import { isDictationLanguage } from "../core/dictation.ts";
 
@@ -222,6 +223,25 @@ function parseHexOrNull(value: unknown, field: string): { color?: string | null;
 
 /** appearance: { mode?, background?, fontFamily?, proseFontSize?,
  *  sessionNameSerif?, mdRendering? } */
+/** The SMILES block: each field optional, bounds named once in core. */
+function parseSmilesBody(raw: unknown): { smiles?: SmilesSettings; error?: string } {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { error: "smiles must be an object" };
+	const r = raw as Record<string, unknown>;
+	const out: SmilesSettings = {};
+	const num = (key: "scale" | "bondThickness" | "textPercent", min: number, max: number, integer = false) => {
+		const value = r[key];
+		if (value === undefined) return;
+		if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+			return `${key} must be a ${integer ? "integer " : ""}number between ${min} and ${max}`;
+		}
+		out[key] = value;
+	};
+	const error = num("scale", SMILES_SCALE_MIN, SMILES_SCALE_MAX)
+		?? num("bondThickness", SMILES_THICKNESS_MIN, SMILES_THICKNESS_MAX)
+		?? num("textPercent", SMILES_TEXT_MIN, SMILES_TEXT_MAX, true);
+	return error ? { error } : { smiles: out };
+}
+
 export function parseAppearanceSettingsBody(body: unknown): SettingsBodyResult<AppearanceSettings> {
 	const raw = asRecord(body);
 	if (!raw) return { ok: false, error: "Invalid JSON body" };
@@ -259,6 +279,23 @@ export function parseAppearanceSettingsBody(body: unknown): SettingsBodyResult<A
 			return { ok: false, error: "sessionNameSerif must be a boolean" };
 		}
 		settings.sessionNameSerif = raw.sessionNameSerif;
+	}
+	if (raw.textMargin !== undefined) {
+		if (typeof raw.textMargin !== "number" || !Number.isInteger(raw.textMargin) || raw.textMargin < TEXT_MARGIN_MIN || raw.textMargin > TEXT_MARGIN_MAX) {
+			return { ok: false, error: `textMargin must be an integer between ${TEXT_MARGIN_MIN} and ${TEXT_MARGIN_MAX}` };
+		}
+		settings.textMargin = raw.textMargin;
+	}
+	if (raw.imageSize !== undefined) {
+		if (typeof raw.imageSize !== "number" || !Number.isInteger(raw.imageSize) || raw.imageSize < IMAGE_SIZE_MIN || raw.imageSize > IMAGE_SIZE_MAX) {
+			return { ok: false, error: `imageSize must be an integer between ${IMAGE_SIZE_MIN} and ${IMAGE_SIZE_MAX}` };
+		}
+		settings.imageSize = raw.imageSize;
+	}
+	if (raw.smiles !== undefined) {
+		const smiles = parseSmilesBody(raw.smiles);
+		if (smiles.error) return { ok: false, error: smiles.error };
+		settings.smiles = smiles.smiles;
 	}
 	if (raw.mdRendering !== undefined) {
 		const md = asRecord(raw.mdRendering);

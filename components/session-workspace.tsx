@@ -37,9 +37,11 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 			finally { fetching = false; }
 		};
 		void refresh();
-		const timer = setInterval(() => void refresh(), 4000);
-		return () => { closed = true; clearInterval(timer); };
-	}, [base]);
+		// Only while open (owner, 2026-10-31): a closed panel used to poll every
+		// 4s for the whole session's lifetime.
+		const timer = tab ? setInterval(() => void refresh(), 4000) : null;
+		return () => { closed = true; if (timer) clearInterval(timer); };
+	}, [base, tab]);
 	async function send() {
 		const text = sideRef.current.draft.trim(); if (!text || busy) return;
 		const history: SideMessage[] = [...sideRef.current.messages, { role: "user", text }];
@@ -79,7 +81,11 @@ export function SessionWorkspace({ chatId, messages, tab, setTab }: {
 	const sources = [...new Map([...saved, ...sessionSources(messages)].map(s => [s.id, s])).values()]
 		.map(s => names[s.id] ? { ...s, title: names[s.id]! } : s);
 	if (!tab) return null;
-	return <aside data-session-workspace="" aria-label="Session workspace" className="fixed inset-y-0 right-0 z-40 flex w-[min(460px,100vw)] flex-col border-l border-border bg-background shadow-lg lg:static lg:shrink-0 lg:shadow-none">
+	return <aside
+		data-session-workspace=""
+		// Esc closes the panel: it must never fall through to the app's
+		// "abort the turn" shortcut while he is reading a source (owner, 2026-10-31).
+		onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); setTab(null); } }} aria-label="Session workspace" className="fixed inset-y-0 right-0 z-40 flex w-[min(460px,100vw)] flex-col border-l border-border bg-background shadow-lg lg:static lg:shrink-0 lg:shadow-none">
 		<header className="flex h-15 shrink-0 items-center gap-4 border-b border-border px-4 font-ui text-xs">
 			{(["side", "sources"] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)} className={tab === t ? "text-foreground" : "text-muted-foreground"}>{t === "side" ? "Side questions" : "Sources"}</button>)}
 			<button className="ml-auto p-1" aria-label="Close session workspace" onClick={() => setTab(null)}><XIcon className="size-4" /></button>

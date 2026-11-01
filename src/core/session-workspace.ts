@@ -12,9 +12,21 @@ export interface WorkspacePort {
 	/** `names`: learner renames by source id, already applied to `sources`. */
 	list(): { files: CourseFile[]; sources: SessionSource[]; names?: Record<string, string> };
 	read(fileId: string, pages: string): Promise<{ text: string; pages: number }>;
-	/** The saved source plus the rendered page PNG (base64) for the model to inspect. */
-	show(fileId: string, page: number): Promise<{ source: SessionSource; png: string }>;
+	/** The saved source plus the rendered page PNG (base64) for the model to inspect.
+	 *  `save: false` displays without recording the page in Sources (a GET must not write). */
+	show(fileId: string, page: number, options?: { save?: boolean }): Promise<{ source: SessionSource; png: string }>;
 }
+/** Short, stable content fingerprint (FNV-1a, base36). Not a security hash —
+ *  it exists so a source's id survives edits elsewhere in the same message. */
+function contentKey(value: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < value.length; i++) {
+		hash ^= value.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193) >>> 0;
+	}
+	return hash.toString(36);
+}
+
 /** Derived from delivered lesson content, not side questions. Stable ids avoid duplicate saves. */
 export function sessionSources(messages: readonly LhViewMessage[]): SessionSource[] {
 	const sources = new Map<string, SessionSource>();
@@ -32,12 +44,15 @@ export function sessionSources(messages: readonly LhViewMessage[]): SessionSourc
 			}
 			if (part.type !== "text" || !part.text || message.role !== "assistant") continue;
 			let count = 0;
+			// Ids hash the CONTENT, not the position: inserting an earlier diagram
+			// must not re-bind a learner's rename to a different figure.
 			for (const fence of part.text.matchAll(/```(mermaid|smiles)\s*\n([\s\S]*?)```/g)) {
-				const key = `${id}-f${count++}`;
-				sources.set(key, { id: key, kind: fence[1] as "mermaid" | "smiles", title: fence[1] === "smiles" ? "Chemical structure" : "Diagram", content: fence[2]!.trim() });
+				const body = fence[2]!.trim();
+				const key = `${id}-f${count++}-${contentKey(body)}`;
+				sources.set(key, { id: key, kind: fence[1] as "mermaid" | "smiles", title: fence[1] === "smiles" ? "Chemical structure" : "Diagram", content: body });
 			}
 			for (const image of part.text.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\/api\/chats\/[^\s)]+)\)/g)) {
-				const key = `${id}-i${count++}`;
+				const key = `${id}-i${count++}-${contentKey(image[2]!)}`;
 				sources.set(key, { id: key, kind: "image", title: image[1] || "Image", url: image[2] });
 			}
 		}

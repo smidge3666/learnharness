@@ -31,6 +31,13 @@ export function resolveAppearance(delta: AppearanceSettings | undefined) {
 		fontFamily: delta?.fontFamily ?? f.fontFamily,
 		proseFontSize: delta?.proseFontSize ?? f.proseFontSize,
 		sessionNameSerif: delta?.sessionNameSerif ?? f.sessionNameSerif,
+		textMargin: delta?.textMargin ?? f.textMargin,
+		imageSize: delta?.imageSize ?? f.imageSize,
+		smiles: {
+			scale: delta?.smiles?.scale ?? f.smiles.scale,
+			bondThickness: delta?.smiles?.bondThickness ?? f.smiles.bondThickness,
+			textPercent: delta?.smiles?.textPercent ?? f.smiles.textPercent,
+		},
 		mdRendering: {
 			headingWeight: delta?.mdRendering?.headingWeight ?? f.mdRendering.headingWeight,
 			boldColor: delta?.mdRendering?.boldColor ?? f.mdRendering.boldColor,
@@ -83,6 +90,15 @@ export function appearanceVars(a: ReturnType<typeof resolveAppearance>): Record<
 	// The ONE documented reading-size variable (typography round 4): prose,
 	// inputs, and session titles all read it, so one setProperty moves them.
 	vars["--lh-prose-size"] = `${a.proseFontSize}px`;
+	// Reading column + figure size (owner, 2026-10-31). 0 margin = full width,
+	// which is the pre-settings behaviour: the var is set to "none" so the
+	// factory max-w-none rule keeps winning.
+	vars["--lh-text-margin"] = a.textMargin > 0 ? `${a.textMargin}px` : "none";
+	vars["--lh-image-size"] = `${a.imageSize}%`;
+	// SMILES drawing: the drawer reads these through the component.
+	vars["--lh-smiles-scale"] = String(a.smiles.scale);
+	vars["--lh-smiles-thickness"] = String(a.smiles.bondThickness);
+	vars["--lh-smiles-font"] = String(a.smiles.textPercent);
 	// Session names: CMU Serif by default; the toggle swaps the title font
 	// to the prose family — covers chat.tsx + new-session.tsx titles with
 	// zero component edits (they use the .font-title utility).

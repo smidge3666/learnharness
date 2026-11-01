@@ -7,7 +7,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { after, describe, it } from "node:test";
 import { inputAppends, parseChatInput, ChatInputError } from "../src/core/input-events.ts";
-import { compactAnswerForModel } from "../src/core/question-core.ts";
+import { compactAnswerForModel, questionFigureSource } from "../src/core/question-core.ts";
 import { sessionSources, validateSideHistory } from "../src/core/session-workspace.ts";
 // The data seam MUST precede the first config-dependent import.
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), "lh-workspace-tests-"));
@@ -50,7 +50,7 @@ describe("Ask a question first (deferred check)", () => {
 		assert.deepEqual(compactAnswerForModel({ kind: "quiz", questionText: "q", dontKnow: false, answers: [], dismissed: true, deferred: true, answeredAt: "" }), { kind: "quiz", deferred: true });
 	});
 	it("the reading field offers the button and plain Enter no longer opens the check", () => {
-		const html = renderToStaticMarkup(<ReadingThinkingField value="" onChange={() => {}} claim onOpen={() => {}} onAsk={() => {}} />);
+		const html = renderToStaticMarkup(<ReadingThinkingField value="" revision={0} onChange={() => {}} claim onOpen={() => {}} onAsk={() => {}} />);
 		assert.match(html, /Ask a question first/);
 	});
 });
@@ -128,5 +128,30 @@ describe("side answers end-to-end (scripted engine, temp data)", () => {
 		assert.equal(fs.readFileSync(path.join(SCRATCH, "data", "chats", `${chat.id}.json`), "utf8"), before);
 		assert.equal(fs.existsSync(path.join(SCRATCH, "data", "graph")), false, "no graph writes");
 		fs.rmSync(root, { recursive: true, force: true });
+	});
+});
+
+describe("question figures (owner, 2026-10-31)", () => {
+	const base = "/api/chats/chat_1/workspace";
+	it("resolves a course page region into a cropped image URL", () => {
+		const source = questionFigureSource({ fileId: "f1", page: 4, crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.25 }, caption: "Figure B" }, base);
+		assert.equal(source?.kind, "page");
+		assert.equal(source?.title, "Figure B");
+		assert.equal(source?.url, `${base}/files/f1/page/4?crop=0.1,0.2,0.5,0.25`);
+	});
+	it("resolves a saved source by id, keeping its own render path", () => {
+		const found = { id: "m1-0-f0-x", kind: "mermaid" as const, title: "Diagram", content: "graph TD; A-->B" };
+		assert.equal(questionFigureSource({ sourceId: "m1-0-f0-x" }, base, id => (id === found.id ? found : undefined))?.title, "Diagram");
+		assert.equal(questionFigureSource({ sourceId: "missing" }, base, () => undefined), undefined);
+	});
+	it("has no figure when neither form is given", () => {
+		assert.equal(questionFigureSource(undefined, base), undefined);
+		assert.equal(questionFigureSource({ caption: "orphan" }, base), undefined);
+	});
+	it("keeps a question's figure out of Sources until it is explicitly saved", () => {
+		// A question figure is a display URL only: no `save=1`, so the page route
+		// records nothing (the review's GET-with-side-effects finding).
+		const url = questionFigureSource({ fileId: "f1", page: 2 }, base)!.url!;
+		assert.ok(!url.includes("save=1"));
 	});
 });

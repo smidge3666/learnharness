@@ -95,7 +95,9 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * deliberately narrower (~46rem centered) per the reference. Same ELEMENT,
  * same place — width polish only.
  */
-const COLUMN = "mx-auto w-full max-w-none px-6";
+// The reading column (owner, 2026-10-31): .lh-reading-column caps the measure
+// at --lh-text-margin (Appearance settings); "none" keeps the old full width.
+const COLUMN = "lh-reading-column mx-auto w-full px-6";
 const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
